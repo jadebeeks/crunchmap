@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isBlackboardHost, isBlackboardIcs } from "@/lib/blackboard";
-import { ignoreKey } from "@/lib/classify";
+import { ignoreKey, isClassTitle } from "@/lib/classify";
 import { parseDeadlines } from "@/lib/ics";
 
 export const runtime = "nodejs";
@@ -72,10 +72,32 @@ export async function POST() {
   const { data: rules } = await supabase.from("bb_ignore_rules").select("pattern");
   const ignorePatterns = (rules ?? []).map((r) => r.pattern as string);
 
+  // Remove imported rows that are class sessions (by UID from the feed or by title) or match a "This is a class" rule.
+  const ignored = new Set(ignorePatterns.map(ignoreKey));
+  async function removeClassRows(classUids: Set<string>): Promise<number> {
+    const { data: existing } = await supabase
+      .from("bb_deadlines")
+      .select("id, title, external_uid")
+      .eq("user_id", user!.id)
+      .eq("source", "blackboard");
+    const staleIds = (existing ?? [])
+      .filter(
+        (d) =>
+          (d.external_uid && classUids.has(d.external_uid)) || isClassTitle(d.title) || ignored.has(ignoreKey(d.title))
+      )
+      .map((d) => d.id as string);
+    for (let i = 0; i < staleIds.length; i += 100) {
+      await supabase.from("bb_deadlines").delete().in("id", staleIds.slice(i, i + 100));
+    }
+    return staleIds.length;
+  }
+
   let parsed: ReturnType<typeof parseDeadlines>;
   try {
     parsed = parseDeadlines(await fetchIcs(source.ics_url), { ignorePatterns });
   } catch {
+    // Even when Blackboard is unreachable, clear class sessions left over from older syncs.
+    await removeClassRows(new Set());
     return NextResponse.json({ error: UNREACHABLE }, { status: 502 });
   }
 
@@ -90,20 +112,7 @@ export async function POST() {
     if (error) return NextResponse.json({ error: "Couldn't save your deadlines. Please try again." }, { status: 500 });
   }
 
-  // Remove imported rows that are now classified as classes or match a "This is a class" rule.
-  const classUids = new Set(parsed.classUids);
-  const ignored = new Set(ignorePatterns.map(ignoreKey));
-  const { data: existing } = await supabase
-    .from("bb_deadlines")
-    .select("id, title, external_uid")
-    .eq("user_id", user.id)
-    .eq("source", "blackboard");
-  const staleIds = (existing ?? [])
-    .filter((d) => (d.external_uid && classUids.has(d.external_uid)) || ignored.has(ignoreKey(d.title)))
-    .map((d) => d.id as string);
-  for (let i = 0; i < staleIds.length; i += 100) {
-    await supabase.from("bb_deadlines").delete().in("id", staleIds.slice(i, i + 100));
-  }
+  const removed = await removeClassRows(new Set(parsed.classUids));
 
   const lastSyncedAt = new Date().toISOString();
   await supabase.from("bb_calendar_sources").update({ last_synced_at: lastSyncedAt }).eq("user_id", user.id);
@@ -111,7 +120,7 @@ export async function POST() {
   return NextResponse.json({
     imported: parsed.rows.length,
     skippedClasses: parsed.skippedClasses,
-    removed: staleIds.length,
+    removed,
     lastSyncedAt,
   });
 }

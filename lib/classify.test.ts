@@ -21,7 +21,12 @@ describe("class sessions", () => {
   ])("timetabled session %s is a class", (title) => {
     const e = event(title, { minutes: 80, location: "T-4.03", description: TIMETABLE });
     expect(classifyEvent(e)).toBe("class");
-    expect(explainEvent(e).reason).toBe("timetable-id");
+    expect(explainEvent(e).reason).toBe("session-word");
+  });
+
+  it("a timetabled session without a session marker is caught by the timetabling ID", () => {
+    const e = event("BEHAVIOR LAB Extra", { minutes: 230, location: "T-1.01", description: TIMETABLE });
+    expect(explainEvent(e)).toEqual({ kind: "class", reason: "timetable-id" });
   });
 
   it("an all-day asynchronous session is a class", () => {
@@ -66,7 +71,6 @@ describe("deadlines", () => {
 
   it("deadline words always win, even over session words and structure", () => {
     expect(classifyEvent(event("session 30 final exam", { uid: GRADABLE }))).toBe("deadline");
-    expect(classifyEvent(event("Presentation for session 2", { uid: GRADABLE }))).toBe("deadline");
     expect(
       classifyEvent(event("STATISTICS (Ses. 14) Midterm exam Live in-person", { minutes: 80, location: "T-4.03", description: TIMETABLE }))
     ).toBe("deadline");
@@ -89,6 +93,8 @@ describe("session markers vs. deadline words in course names", () => {
     "SOFTWARE TESTING (Ses. 4) Live in-person",
     "ASSIGNMENT DESIGN Session 2",
     "PITCH CLINIC Ses 5",
+    "PROJECT MANAGEMENT CLASS",
+    "Software Testing class",
   ])("%s is a class", (title) => {
     expect(classifyEvent(session(title))).toBe("class");
     expect(classifyEvent(session(title, false))).toBe("class");
@@ -108,12 +114,18 @@ describe("session markers vs. deadline words in course names", () => {
     expect(classifyEvent(e)).toBe("deadline");
   });
 
-  it("a Blackboard graded item stays a deadline even with a session marker", () => {
-    expect(classifyEvent(event("Presentation for session 2", { uid: GRADABLE }))).toBe("deadline");
+  it("a session marker wins over structure, even on a graded item without a strong deadline word", () => {
+    expect(classifyEvent(event("Presentation for session 2", { uid: GRADABLE }))).toBe("class");
+    expect(classifyEvent(event("session 30 final exam", { uid: GRADABLE }))).toBe("deadline");
+  });
+
+  it("a title merely containing the word class is not a session marker", () => {
+    expect(classifyEvent(event("Class participation reflection", { at: "2026-11-03T23:59:00+01:00" }))).toBe("deadline");
   });
 
   it("isClassTitle matches the session-marker rule", () => {
     expect(isClassTitle("PROJECT MANAGEMENT (Ses. 9) Live in-person")).toBe(true);
+    expect(isClassTitle("PROJECT MANAGEMENT CLASS")).toBe(true);
     expect(isClassTitle("Final exam (Ses. 30) Live in-person")).toBe(false);
     expect(isClassTitle("Group project submission")).toBe(false);
   });

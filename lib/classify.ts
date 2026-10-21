@@ -27,9 +27,9 @@ export type ClassificationReason =
 const STRONG_DEADLINE_WORDS =
   /\b(exams?|midterms?|final\s+exams?|quiz(zes)?|deadlines?|due|submissions?|submit|hand[- ]?in)\b/i;
 
-// Markers that only timetabled sessions carry.
+// Markers that only timetabled sessions carry, e.g. "(Ses. 9) Live in-person" or "PROJECT MANAGEMENT CLASS".
 const SESSION_MARKERS =
-  /\(\s*Ses\.?\s*\d+(\s*-\s*\d+)?\s*\)|\bSes\.?\s*\d+|\bSession\s*\d+|\bLive\s+(in-person|online)\b/i;
+  /\(\s*Ses\.?\s*\d+(\s*-\s*\d+)?\s*\)|\bSes\.?\s*\d+|\bSession\s*\d+|\bLive\s+(in-person|online)\b|\sCLASS\s*$/i;
 
 const CLASS_WORDS = /\bLectures?\b|\bClass(es)?\b|\bAsynchronous\b/i;
 
@@ -49,10 +49,10 @@ export function explainEvent(event: CalendarEvent): { kind: Classification; reas
   const length = minutes(event);
 
   if (STRONG_DEADLINE_WORDS.test(title)) return { kind: "deadline", reason: "deadline-word" };
-  // Blackboard only uses GradableItem UIDs for graded work, e.g. "Presentation for session 2".
+  // A session marker always means a class unless a strong deadline word is present (checked above).
+  if (SESSION_MARKERS.test(title)) return { kind: "class", reason: "session-word" };
   if (/GradableItem/i.test(event.uid)) return { kind: "deadline", reason: "gradable-item" };
   if (TIMETABLE_ID.test(event.description ?? "")) return { kind: "class", reason: "timetable-id" };
-  if (SESSION_MARKERS.test(title)) return { kind: "class", reason: "session-word" };
   if (length <= 0) return { kind: "deadline", reason: "zero-length" };
   if (CLASS_WORDS.test(title)) return { kind: "class", reason: "session-word" };
   if (length < MAX_CLASS_MINUTES && event.location?.trim()) return { kind: "class", reason: "timed-with-room" };

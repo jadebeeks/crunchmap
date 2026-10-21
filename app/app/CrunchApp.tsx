@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DEADLINE_TYPES, isBlackboardIcs, maskUrl } from "@/lib/blackboard";
-import { ignoreKey, normalizeClassTitle } from "@/lib/classify";
+import { ignoreKey, isClassTitle, normalizeClassTitle } from "@/lib/classify";
 import { buildCrunchMap, isAdmin, type Level } from "@/lib/crunch";
 import { addDays, dayKey, formatDay, formatDayMonth, madridToISO, relativeDays, timeAgo, todayKey } from "@/lib/dates";
 import type { Deadline } from "@/lib/types";
@@ -85,12 +85,14 @@ export default function CrunchApp({
     }
   }
 
-  // Auto-sync on load when the last sync is older than 4 hours.
+  // Auto-sync on load when the last sync is older than 4 hours, or when class sessions from an older sync
+  // are still in the list (the sync removes them).
   useEffect(() => {
     if (autoSynced.current || !initialSource) return;
     autoSynced.current = true;
     const last = initialSource.lastSyncedAt ? new Date(initialSource.lastSyncedAt).getTime() : 0;
-    if (Date.now() - last > SYNC_EVERY_MS) {
+    const hasClassRows = initialDeadlines.some((d) => d.source === "blackboard" && isClassTitle(d.title));
+    if (Date.now() - last > SYNC_EVERY_MS || hasClassRows) {
       setStatus({ tone: "info", text: "Syncing with Blackboard…" });
       sync();
     }
