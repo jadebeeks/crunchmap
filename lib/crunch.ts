@@ -1,4 +1,5 @@
 import { addDays, dayKey, formatDay, formatDayMonth, mondayOf, todayKey } from "./dates";
+import { isClassTitle } from "./classify";
 import type { Deadline } from "./types";
 
 export type Level = "Calm" | "Busy" | "Crunch";
@@ -30,9 +31,10 @@ export function levelFor(count: number): Level {
 export function buildCrunchMap(deadlines: Deadline[], today = todayKey()): CrunchMap {
   const firstMonday = mondayOf(today);
   const lastDay = addDays(firstMonday, 8 * 7 - 1);
-  // Done items, admin dates (e.g. "Last day to drop") and anything already past don't add to the load.
+  // Done items, admin dates (e.g. "Last day to drop"), anything already past and imported class sessions
+  // left over from an older sync don't add to the load, so tips never suggest starting a class.
   const pending = deadlines
-    .filter((d) => !d.done && !isAdmin(d))
+    .filter((d) => !d.done && !isAdmin(d) && !(d.source === "blackboard" && isClassTitle(d.title)))
     .map((d) => ({ d, key: dayKey(d.due_at) }))
     .filter(({ key }) => key >= today && key <= lastDay)
     .sort((a, b) => a.d.due_at.localeCompare(b.d.due_at));

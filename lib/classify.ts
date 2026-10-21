@@ -22,11 +22,16 @@ export type ClassificationReason =
   | "admin-date"
   | "default";
 
-const DEADLINE_WORDS =
-  /\b(exams?|midterms?|finals?|quiz(zes)?|tests?|deadlines?|due|submissions?|submit|presentations?|pitch(es)?|assignments?|projects?|hand[- ]?in)\b/i;
+// Only words that never appear in course names. "Project", "assignment", "presentation", "pitch" and "test"
+// are left out because courses such as "PROJECT MANAGEMENT" or "SOFTWARE TESTING" contain them.
+const STRONG_DEADLINE_WORDS =
+  /\b(exams?|midterms?|final\s+exams?|quiz(zes)?|deadlines?|due|submissions?|submit|hand[- ]?in)\b/i;
 
-const CLASS_WORDS =
-  /\(\s*Ses\.?\s*\d+(\s*-\s*\d+)?\s*\)|\bSes\.?\s*\d+|\bSession\s*\d+|\bLive\s+(in-person|online)\b|\bLectures?\b|\bClass(es)?\b|\bAsynchronous\b/i;
+// Markers that only timetabled sessions carry.
+const SESSION_MARKERS =
+  /\(\s*Ses\.?\s*\d+(\s*-\s*\d+)?\s*\)|\bSes\.?\s*\d+|\bSession\s*\d+|\bLive\s+(in-person|online)\b/i;
+
+const CLASS_WORDS = /\bLectures?\b|\bClass(es)?\b|\bAsynchronous\b/i;
 
 // IE's timetabling system stamps every scheduled session with "ICALUID:…PLANI…" in the description.
 const TIMETABLE_ID = /ICALUID:\S*PLANI/i;
@@ -43,14 +48,21 @@ export function explainEvent(event: CalendarEvent): { kind: Classification; reas
   const title = event.summary ?? "";
   const length = minutes(event);
 
-  if (DEADLINE_WORDS.test(title)) return { kind: "deadline", reason: "deadline-word" };
+  if (STRONG_DEADLINE_WORDS.test(title)) return { kind: "deadline", reason: "deadline-word" };
+  // Blackboard only uses GradableItem UIDs for graded work, e.g. "Presentation for session 2".
   if (/GradableItem/i.test(event.uid)) return { kind: "deadline", reason: "gradable-item" };
-  if (length <= 0) return { kind: "deadline", reason: "zero-length" };
   if (TIMETABLE_ID.test(event.description ?? "")) return { kind: "class", reason: "timetable-id" };
+  if (SESSION_MARKERS.test(title)) return { kind: "class", reason: "session-word" };
+  if (length <= 0) return { kind: "deadline", reason: "zero-length" };
   if (CLASS_WORDS.test(title)) return { kind: "class", reason: "session-word" };
   if (length < MAX_CLASS_MINUTES && event.location?.trim()) return { kind: "class", reason: "timed-with-room" };
   if (length >= MAX_CLASS_MINUTES) return { kind: "deadline", reason: "admin-date" };
   return { kind: "deadline", reason: "default" };
+}
+
+// A title that reads as a class session: a session marker and no strong deadline word.
+export function isClassTitle(title: string): boolean {
+  return SESSION_MARKERS.test(title) && !STRONG_DEADLINE_WORDS.test(title);
 }
 
 export function classifyEvent(event: CalendarEvent): Classification {

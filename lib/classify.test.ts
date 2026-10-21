@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyEvent, explainEvent, ignoreKey, isAdminDate, normalizeClassTitle, type CalendarEvent } from "./classify";
+import { classifyEvent, explainEvent, ignoreKey, isAdminDate, isClassTitle, normalizeClassTitle, type CalendarEvent } from "./classify";
 
 const CAL = "_blackboard.data.calendar.CalendarEntry-_1001_1";
 const GRADABLE = "_blackboard.platform.gradebook2.GradableItem-_2002_1";
@@ -70,7 +70,52 @@ describe("deadlines", () => {
     expect(
       classifyEvent(event("STATISTICS (Ses. 14) Midterm exam Live in-person", { minutes: 80, location: "T-4.03", description: TIMETABLE }))
     ).toBe("deadline");
-    expect(classifyEvent(event("Group project kickoff Lecture", { minutes: 80, location: "T-2.01" }))).toBe("deadline");
+  });
+
+  it("course names containing words like project or presentation are not deadlines", () => {
+    expect(classifyEvent(event("Group project kickoff Lecture", { minutes: 80, location: "T-2.01" }))).toBe("class");
+  });
+});
+
+describe("session markers vs. deadline words in course names", () => {
+  // Real session events: timed, in a room, with or without the timetabling ID.
+  const session = (title: string, withId = true) =>
+    event(title, { minutes: 80, location: "T-4.03", description: withId ? TIMETABLE : undefined });
+
+  it.each([
+    "PROJECT MANAGEMENT (Ses. 9) Live in-person",
+    "PROJECT MANAGEMENT (Ses. 12) Live in-person",
+    "PRESENTATION SKILLS (Ses. 3) Live online",
+    "SOFTWARE TESTING (Ses. 4) Live in-person",
+    "ASSIGNMENT DESIGN Session 2",
+    "PITCH CLINIC Ses 5",
+  ])("%s is a class", (title) => {
+    expect(classifyEvent(session(title))).toBe("class");
+    expect(classifyEvent(session(title, false))).toBe("class");
+    // Even a zero-length entry with a session marker is a class.
+    expect(classifyEvent(event(title))).toBe("class");
+  });
+
+  it.each([
+    ["Final exam (Ses. 30) Live in-person", session("Final exam (Ses. 30) Live in-person")],
+    ["Midterm exam", event("Midterm exam", { at: "2026-11-03T23:59:00+01:00" })],
+    ["Midterm deliverable", event("Midterm deliverable", { at: "2026-11-03T23:59:00+01:00" })],
+    ["Assignment 2 - Computer Vision", event("Assignment 2 - Computer Vision", { at: "2026-11-03T23:59:00+01:00" })],
+    ["Group project submission", event("Group project submission", { at: "2026-11-03T23:59:00+01:00" })],
+    ["Quiz 3 (Ses. 7) Live online", session("Quiz 3 (Ses. 7) Live online")],
+    ["Deliverable due (Session 8)", session("Deliverable due (Session 8)", false)],
+  ])("%s is a deadline", (_title, e) => {
+    expect(classifyEvent(e)).toBe("deadline");
+  });
+
+  it("a Blackboard graded item stays a deadline even with a session marker", () => {
+    expect(classifyEvent(event("Presentation for session 2", { uid: GRADABLE }))).toBe("deadline");
+  });
+
+  it("isClassTitle matches the session-marker rule", () => {
+    expect(isClassTitle("PROJECT MANAGEMENT (Ses. 9) Live in-person")).toBe(true);
+    expect(isClassTitle("Final exam (Ses. 30) Live in-person")).toBe(false);
+    expect(isClassTitle("Group project submission")).toBe(false);
   });
 });
 
