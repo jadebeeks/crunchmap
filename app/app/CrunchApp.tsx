@@ -57,7 +57,9 @@ export default function CrunchApp({
   const [, setTick] = useState(0);
   const autoSynced = useRef(false);
 
+  const isEmpty = text.trim() === "";
   const isLink = /^http/i.test(text.trim());
+  const submitLabel = isEmpty ? "Import or add" : isLink ? "Import calendar" : "Add deadline";
 
   async function reload() {
     const { data, error } = await supabase.from("bb_deadlines").select(COLUMNS).order("due_at", { ascending: true });
@@ -354,7 +356,7 @@ export default function CrunchApp({
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="https://blackboard.ie.edu/…/learn.ics or e.g. Statistics midterm"
-              aria-describedby="core-help"
+              aria-describedby={isEmpty ? "core-help core-hint" : "core-help"}
               data-testid="core-input"
               className="min-w-0 flex-1 rounded-md border border-slate-400 px-3 py-2.5 text-slate-900 placeholder:text-slate-500"
             />
@@ -362,11 +364,17 @@ export default function CrunchApp({
               type="submit"
               disabled={busy}
               data-testid="core-submit"
-              className="rounded-md bg-teal-700 px-5 py-2.5 font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
+              className="w-full rounded-md bg-teal-700 px-6 py-3 text-base font-bold text-white shadow-md hover:bg-teal-800 focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2 disabled:opacity-60 sm:w-auto sm:shrink-0"
             >
-              {isLink ? "Import calendar" : "Add deadline"}
+              {submitLabel}
             </button>
           </div>
+          {isEmpty && (
+            <p id="core-hint" className="text-sm text-slate-700">
+              Paste your Blackboard link to import everything, or type a title (e.g. Statistics midterm) to add one
+              deadline.
+            </p>
+          )}
 
           <details className="text-sm">
             <summary className="cursor-pointer font-medium text-slate-700">More options for a typed deadline</summary>
