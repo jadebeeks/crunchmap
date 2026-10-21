@@ -53,6 +53,7 @@ export default function CrunchApp({
   const [syncing, setSyncing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [guideDismissed, setGuideDismissed] = useState(false);
   const [, setTick] = useState(0);
   const autoSynced = useRef(false);
 
@@ -205,6 +206,8 @@ export default function CrunchApp({
 
   const today = todayKey();
   const map = buildCrunchMap(deadlines, today);
+  const mapIsEmpty = map.weeks.every((w) => w.count === 0);
+  const showGuide = !guideDismissed && !source && deadlines.length === 0;
   const isPast = (d: Deadline) => !d.done && dayKey(d.due_at) < today;
   const pending = deadlines.filter((d) => !d.done && !isPast(d)).sort(byDue);
   const done = deadlines.filter((d) => d.done).sort(byDue);
@@ -299,6 +302,25 @@ export default function CrunchApp({
 
   return (
     <main className="mx-auto max-w-4xl space-y-8 px-4 py-6">
+      {/* First visit: a short guide above the smart box (not a modal, the box stays usable). */}
+      {showGuide && (
+        <section aria-labelledby="guide-heading" className="rounded-xl border border-sky-300 bg-sky-50 p-4 text-slate-900 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <h2 id="guide-heading" className="text-lg font-semibold">
+              Get started
+            </h2>
+            <button type="button" onClick={() => setGuideDismissed(true)} className="text-sm text-slate-800 underline">
+              Dismiss
+            </button>
+          </div>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
+            <li>In Blackboard open Calendar → Share Calendar → copy the link.</li>
+            <li>Paste it in the box below and click Import calendar.</li>
+            <li>Check your crunch weeks and start early.</li>
+          </ol>
+        </section>
+      )}
+
       {/* a) Smart box */}
       <section aria-labelledby="smart-box-label" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <form onSubmit={onSubmit} className="space-y-3">
@@ -428,6 +450,9 @@ export default function CrunchApp({
         <h2 id="map-heading" className="text-xl font-bold text-slate-900">
           Your next 8 weeks
         </h2>
+        {mapIsEmpty && (
+          <p className="mt-1 text-sm text-slate-700">Your weeks appear here after you import or add a deadline.</p>
+        )}
         <ol className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
           {map.weeks.map((w) => (
             <li key={w.start} className={`min-w-0 rounded-lg border-2 p-3 ${levelStyles[w.level]}`}>
