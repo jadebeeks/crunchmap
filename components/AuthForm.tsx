@@ -61,8 +61,14 @@ export default function AuthForm({ mode }: { mode: "signup" | "login" }) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             data-testid={`${mode}-email`}
+            aria-describedby={isSignup ? "email-help" : undefined}
             className="mt-1 w-full rounded-md border border-slate-400 px-3 py-2 text-slate-900"
           />
+          {isSignup && (
+            <p id="email-help" className="mt-1 text-xs text-slate-600">
+              Any email works — your IE email is fine.
+            </p>
+          )}
         </div>
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-slate-800">
