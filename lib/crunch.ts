@@ -1,4 +1,5 @@
 import { addDays, dayKey, formatDay, formatDayMonth, mondayOf, todayKey } from "./dates";
+import { isExamTitle } from "./blackboard";
 import { isClassTitle } from "./classify";
 import type { Deadline } from "./types";
 
@@ -8,6 +9,9 @@ export type Week = {
   start: string;
   end: string;
   count: number;
+  exams: number;
+  // Exams weigh 2 points, everything else 1; the level comes from the load, not the raw count.
+  load: number;
   level: Level;
   deadlines: Deadline[];
 };
@@ -22,9 +26,15 @@ export function isAdmin(d: Deadline): boolean {
   return d.type === "Admin";
 }
 
-export function levelFor(count: number): Level {
-  if (count >= 4) return "Crunch";
-  if (count >= 2) return "Busy";
+// An exam is anything typed as Exam, or a default-typed item whose title reads like one.
+export function isExam(d: Deadline): boolean {
+  if (d.type === "Exam") return true;
+  return (!d.type || d.type === "Assignment") && isExamTitle(d.title);
+}
+
+export function levelFor(load: number): Level {
+  if (load >= 4) return "Crunch";
+  if (load >= 2) return "Busy";
   return "Calm";
 }
 
@@ -43,7 +53,9 @@ export function buildCrunchMap(deadlines: Deadline[], today = todayKey()): Crunc
     const start = addDays(firstMonday, i * 7);
     const end = addDays(start, 6);
     const inWeek = pending.filter(({ key }) => key >= start && key <= end).map(({ d }) => d);
-    return { start, end, count: inWeek.length, level: levelFor(inWeek.length), deadlines: inWeek };
+    const exams = inWeek.filter(isExam).length;
+    const load = inWeek.length + exams;
+    return { start, end, count: inWeek.length, exams, load, level: levelFor(load), deadlines: inWeek };
   });
 
   const perDay = new Map<string, number>();
@@ -57,7 +69,7 @@ export function buildCrunchMap(deadlines: Deadline[], today = todayKey()): Crunc
     .filter((w) => w.level !== "Calm")
     .map((w) => {
       const first = w.deadlines[0];
-      return `Week of ${formatDayMonth(w.start)} has ${w.count} deadlines — start '${first.title}' by ${formatDay(addDays(w.start, -7))}`;
+      return `Week of ${formatDayMonth(w.start)} has ${w.count} ${w.count === 1 ? "deadline" : "deadlines"} — start '${first.title}' by ${formatDay(addDays(w.start, -7))}`;
     });
 
   return { weeks, clashes, tips };

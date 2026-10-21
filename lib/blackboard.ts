@@ -26,8 +26,15 @@ export function maskUrl(text: string): string {
 
 export const DEADLINE_TYPES = ["Assignment", "Exam", "Group project", "Presentation", "Personal"] as const;
 
+// Whole words only, so "SOFTWARE TESTING" or "finally" don't count.
+const EXAM_WORDS = /\b(exams?|midterms?|finals?|quiz(zes)?|tests?)\b/i;
+
+export function isExamTitle(title: string): boolean {
+  return EXAM_WORDS.test(title);
+}
+
 export function guessType(title: string): string {
-  if (/exam|midterm|final/i.test(title)) return "Exam";
+  if (isExamTitle(title)) return "Exam";
   if (/group/i.test(title)) return "Group project";
   if (/presentation|pitch/i.test(title)) return "Presentation";
   return "Assignment";

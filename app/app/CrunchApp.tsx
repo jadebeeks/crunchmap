@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { DEADLINE_TYPES, isBlackboardIcs, maskUrl } from "@/lib/blackboard";
+import { DEADLINE_TYPES, isBlackboardIcs, isExamTitle, maskUrl } from "@/lib/blackboard";
 import { ignoreKey, isClassTitle, normalizeClassTitle } from "@/lib/classify";
-import { buildCrunchMap, isAdmin, type Level } from "@/lib/crunch";
+import { buildCrunchMap, isAdmin, isExam, type Level } from "@/lib/crunch";
 import { addDays, dayKey, formatDay, formatDayMonth, madridToISO, relativeDays, timeAgo, todayKey } from "@/lib/dates";
 import type { Deadline } from "@/lib/types";
 
@@ -131,7 +131,8 @@ export default function CrunchApp({
             user_id: userId,
             title: value.slice(0, 120),
             due_at: madridToISO(dueKey || defaultDueKey()),
-            type,
+            // Left on the default type, an exam-sounding title ("Statistics midterm") is saved as an Exam.
+            type: type === "Assignment" && isExamTitle(value) ? "Exam" : type,
             course: course.trim() || null,
             source: "manual",
           })
@@ -223,6 +224,7 @@ export default function CrunchApp({
   const renderItem = (d: Deadline) => {
     const key = dayKey(d.due_at);
     const fromBlackboard = d.source === "blackboard";
+    const exam = isExam(d);
     return (
       <li
         key={d.id}
@@ -239,18 +241,30 @@ export default function CrunchApp({
             aria-label={`Done: ${d.title}`}
           />
           <div className="min-w-0 flex-1">
-            <p className={`font-semibold [overflow-wrap:anywhere] ${d.done ? "line-through" : "text-slate-900"}`}>
+            <p
+              className={`${exam ? "font-extrabold" : "font-semibold"} [overflow-wrap:anywhere] ${d.done ? "line-through" : "text-slate-900"}`}
+            >
               {d.title}
             </p>
             <p className="mt-0.5 text-sm text-slate-700">
               <span>{formatDay(key)}</span> · <span suppressHydrationWarning>{relativeDays(key, today)}</span>
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium">
-              <span
-                className={`rounded px-2 py-0.5 ${isAdmin(d) ? "bg-amber-100 text-amber-950" : "bg-slate-200 text-slate-800"}`}
-              >
-                {d.type ?? "Assignment"}
-              </span>
+              {exam ? (
+                <span className="inline-flex items-center gap-1 rounded border border-rose-700 bg-rose-50 px-2 py-0.5 font-bold text-rose-900">
+                  <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+                    <rect x="3" y="1.5" width="10" height="13" rx="1.5" />
+                    <path d="M5.5 5h5M5.5 8h5M5.5 11h3" />
+                  </svg>
+                  Exam
+                </span>
+              ) : (
+                <span
+                  className={`rounded px-2 py-0.5 ${isAdmin(d) ? "bg-amber-100 text-amber-950" : "bg-slate-200 text-slate-800"}`}
+                >
+                  {d.type ?? "Assignment"}
+                </span>
+              )}
               {d.course && (
                 <span className="rounded bg-sky-100 px-2 py-0.5 text-sky-900 [overflow-wrap:anywhere]">{d.course}</span>
               )}
@@ -461,7 +475,10 @@ export default function CrunchApp({
                 {formatDayMonth(w.start)} – {formatDayMonth(w.end)}
               </p>
               <p className="mt-2 text-2xl font-bold">{w.count}</p>
-              <p className="text-xs">{w.count === 1 ? "deadline" : "deadlines"}</p>
+              <p className="text-xs">
+                {w.count === 1 ? "deadline" : "deadlines"}
+                {w.exams > 0 && ` (incl. ${w.exams} ${w.exams === 1 ? "exam" : "exams"})`}
+              </p>
               <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs font-bold ${levelBadge[w.level]}`}>
                 {w.level}
               </span>
